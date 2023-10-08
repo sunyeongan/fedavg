@@ -273,3 +273,4 @@ for k in range(0,32):
                     else: # 시그널이 잘못되었다면
                         print(f"시그널이 잘못되었습니다. 확인하세요.{what_signal}")
                         break
+# feat bracn 추가 
