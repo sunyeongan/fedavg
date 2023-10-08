@@ -68,6 +68,7 @@ from os.path import exists
 import select
 import sys
 import os
+import time
 # 서버에서 클라이언트로 global model 전송
 #클라이언트와의 접속 확인
 # 클라이언트로 부터 모델 파일 명 recv
@@ -77,21 +78,24 @@ import os
 
 current_path = os.getcwd()
 current_model_file_path = os.path.join(current_path, 'model_file')
-update_iter = 10
+update_iter = 30
 
 client_model_file_list = []
 
-HOST = 'SERVER IP'
-PORT = 'SERVER PORT'
+HOST = ''
+PORT = 33138
 u_index = 0
 
 
-for k in range(0,update_iter+1):
+for k in range(0,32):
 
-    server_model_file_name = os.path.join('server-global-model_', str(k), '.pth')
+    #server_model_file_name = os.path.join('server-global-model_', str(k), '.pth')
+
     global_model = Classifier()
     global_model.apply(weights_init)
     global_model.to(device)
+
+    print(f'=========================================k : {k} =================================================')
 
     if k == 0:
         torch.save(global_model, './model_file/global_model/server-global-model_' + str(
@@ -112,7 +116,17 @@ for k in range(0,update_iter+1):
         c = 0
 
 
-        while True:
+        for k in range(0,32):
+
+            server_model_file_name = os.path.join('server-global-model_', str(k), '.pth')
+
+            global_model = Classifier()
+            global_model.apply(weights_init)
+            global_model.to(device)
+
+            if k == 0:
+                torch.save(global_model, './model_file/global_model/server-global-model_' + str(
+                    k) + '.pth')  ## => 0일떄
 
             #if len(client_model_file_list) == 2:
 
@@ -133,6 +147,13 @@ for k in range(0,update_iter+1):
                 else: # 이미 접속한 클라이언트의 요청
                     # readables는 수신한 데이터를 가진 소켓을 의미. 만약 수신한 데이터를 가진 소켓이 클라이언트 소켓이라면 sock=cli sock으로 할당, s는 계속해서 서버의 소켓이다.
                     conn = sock # 이미 접속한 클라이언트의 요청 (클라이언트가 파일 전송을 요청하는 경우)
+
+                    # 클라이언트에게 글로벌 모델이 생성됐다는 시그널을 보내야함, 클라이언트는 이 신호를 받고 서버에게 글로벌 모델 파일을 요청함
+
+                    #conn.sendall('global_model_making_sucess'.encode('utf-8'))  # 클라이언트에게 글로벌 모델이 생성 완료됐다는 시그널을 보낸다.
+
+
+
 
                     what_signal = conn.recv(1024).decode('utf-8') # 클라이언트의 신호를 2가지로 나눔 (모델 요청 신호, 모델 전송 신호)
 
@@ -171,80 +192,84 @@ for k in range(0,update_iter+1):
                             break
                     #else:
                     elif what_signal == 'model_transfer': # 클라이언트로부터 모델 전송 시그널을 받으면
-                        print("클라이언트가 업데이트한 모델파일을 전송 받는중...")
-
-                        recv_client_model_file_name = conn.recv(1024).decode('utf-8')  # client 이름 전송 받아야함 , 파일 경로 때문에
-
-                        #client_model_file_name = recv_client_name + '_update_model_' + str(k) + '.pt'
-                        client_model_file_list.append(recv_client_model_file_name) # client 모델 파일을 리스트에 넣음
-                        # client_2_model_file_name = 'client_2_update_model_' + str(k) + '.pt'
-
-                        update_save_dir = os.path.join(current_model_file_path,
-                                                       recv_client_model_file_name[
-                                                       13:18] + '\\' + recv_client_model_file_name)  # 저장할 경로
 
 
-                        update_data = conn.recv(8192) # 클라이언트에게 파일을 전송 받음
-                        update_data_transferred = 0
+                        while True:
+
+                            if len(client_model_file_list) <= 1:
+                                print("모든 클라이언트의 모델 파일 전송을 기다립니다. ")
+                                print("클라이언트가 업데이트한 모델파일을 전송 받는중...")
+                                recv_client_model_file_name = conn.recv(1024).decode(
+                                    'utf-8')  # client 이름 전송 받아야함 , 파일 경로 때문에
+
+                                # client_model_file_name = recv_client_name + '_update_model_' + str(k) + '.pt'
+                                client_model_file_list.append(recv_client_model_file_name)  # client 모델 파일을 리스트에 넣음
+                                # client_2_model_file_name = 'client_2_update_model_' + str(k) + '.pt'
+
+                                update_save_dir = os.path.join(current_model_file_path,
+                                                               recv_client_model_file_name[
+                                                               13:18] + '\\' + recv_client_model_file_name)  # 저장할 경로
+                                print(update_save_dir)
+                                update_data = conn.recv(8192)  # 클라이언트에게 파일을 전송 받음
+                                update_data_transferred = 0
+
+                                with open(update_save_dir, 'wb') as f:  # 업데이터 모델 파일 내용 저장
+
+                                    try:
+                                        while update_data:
+                                            f.write(update_data)
+                                            update_data_transferred += len(update_data)
+                                            update_data = conn.recv(8192)
+
+                                    except Exception as ex:
+                                        print(ex)
+                                print("파일 %s 받기 완료 : 전송량 %d " % (recv_client_model_file_name, update_data_transferred))
 
 
 
-                        with open(update_save_dir, 'wb') as f: # 업데이터 모델 파일 내용 저장
 
-                            try:
-                                while update_data:
-                                    f.write(update_data)
-                                    update_data_transferred += len(update_data)
-                                    update_data = conn.recv(8192)
+                            else:  # client list가 2면 글로벌 모델을 생성
 
-                            except Exception as ex:
-                                print(ex)
-                        print("파일 %s 받기 완료 : 전송량 %d " % (recv_client_model_file_name, update_data_transferred))
+                                print("======= 서버가 글로벌 모델을 생성합니다 ====== ")
+                                client_1_model_file_name, client_2_model_file_name = client_model_file_list[0], \
+                                    client_model_file_list[1]  # 클라이언트의 전송 차이가 남 sleep을 걸까?
+                                print(client_1_model_file_name)
+                                print(client_2_model_file_name)
 
-                        client_model_file_list = []
-                        conn.close()  # 나중에 클라이언트에서 서버로 파라미터 파일 전송할 때를 대비해서 소켓을 지우면 안되나? 아니면 저때만 다시 소켓을 만드나?
-                        readsocks.remove(sock)  # 클라이언트 접속 해제시 readsocks에서 제거
+                                state_dict_1 = torch.load('./model_file/client_1/' + client_1_model_file_name)
+                                state_dict_2 = torch.load('./model_file/client_2/' + client_2_model_file_name)
 
-                        #break  # while문 통과
+                                # 글로벌 모델의 w, b  만들기.
+                                global_fc1_weight = (state_dict_1['fc1.weight'] + state_dict_2['fc1.weight']) / 2
+                                global_fc2_weight = (state_dict_1['fc2.weight'] + state_dict_2['fc2.weight']) / 2
+                                global_fc3_weight = (state_dict_1['fc3.weight'] + state_dict_2['fc3.weight']) / 2
+
+                                global_fc1_bias = (state_dict_1['fc1.bias'] + state_dict_2['fc1.bias']) / 2
+                                global_fc2_bias = (state_dict_1['fc2.bias'] + state_dict_2['fc2.bias']) / 2
+                                global_fc3_bias = (state_dict_1['fc3.bias'] + state_dict_2['fc3.bias']) / 2
+
+                                # 글로벌 모델 객체의 w,b 변수에 각 클라이언트의 w,b를 평균낸 값을 할당.
+                                global_model.fc1.weight = torch.nn.Parameter(global_fc1_weight)
+                                global_model.fc1.bias = torch.nn.Parameter(global_fc1_bias)
+
+                                global_model.fc2.weight = torch.nn.Parameter(global_fc2_weight)
+                                global_model.fc2.bias = torch.nn.Parameter(global_fc2_bias)
+
+                                global_model.fc3.weight = torch.nn.Parameter(global_fc3_weight)
+                                global_model.fc3.bias = torch.nn.Parameter(global_fc3_bias)
+
+                                # 글로벌 모델 파일 저장
+                                torch.save(global_model, './model_file/global_model/server-global-model_' + str(
+                                    k) + '.pth')  ## => 2개의 클라이언트의 파일을 fedavg한 후 저장 해야함 .
+
+
+                                client_model_file_list = []
+                                conn.close()  # 나중에 클라이언트에서 서버로 파라미터 파일 전송할 때를 대비해서 소켓을 지우면 안되나? 아니면 저때만 다시 소켓을 만드나?
+                                readsocks.remove(sock)  # 클라이언트 접속 해제시 readsocks에서 제거
+
+                                    #break  # while문 통과
+                                break
 
                     else: # 시그널이 잘못되었다면
                         print(f"시그널이 잘못되었습니다. 확인하세요.{what_signal}")
                         break
-
-
-        client_1_model_file_name, client_2_model_file_name = client_model_file_list[0], client_model_file_list[1]
-        print(client_1_model_file_name)
-        print(client_2_model_file_name)
-
-
-
-        if k != 0:  # fedavg 수행 , k가 1 이상일 때 부터 수행
-
-            # 클라이언트로부터 받은 모델 파일 로드
-
-            # 클라이언트에서 학습한 파라미터 파일 로드
-            state_dict_1 = torch.load('./model_file/client_1/' + client_1_model_file_name)
-            state_dict_2 = torch.load('./model_file/client_2/' + client_2_model_file_name)
-
-            # 글로벌 모델의 w, b  만들기.
-            global_fc1_weight = (state_dict_1['fc1.weight'] + state_dict_2['fc1.weight']) / 2
-            global_fc2_weight = (state_dict_1['fc2.weight'] + state_dict_2['fc2.weight']) / 2
-            global_fc3_weight = (state_dict_1['fc3.weight'] + state_dict_2['fc3.weight']) / 2
-
-            global_fc1_bias = (state_dict_1['fc1.bias'] + state_dict_2['fc1.bias']) / 2
-            global_fc2_bias = (state_dict_1['fc2.bias'] + state_dict_2['fc2.bias']) / 2
-            global_fc3_bias = (state_dict_1['fc3.bias'] + state_dict_2['fc3.bias']) / 2
-
-            # 글로벌 모델 객체의 w,b 변수에 각 클라이언트의 w,b를 평균낸 값을 할당.
-            global_model.fc1.weight = torch.nn.Parameter(global_fc1_weight)
-            global_model.fc1.bias = torch.nn.Parameter(global_fc1_bias)
-
-            global_model.fc2.weight = torch.nn.Parameter(global_fc2_weight)
-            global_model.fc2.bias = torch.nn.Parameter(global_fc2_bias)
-
-            global_model.fc3.weight = torch.nn.Parameter(global_fc3_weight)
-            global_model.fc3.bias = torch.nn.Parameter(global_fc3_bias)
-
-            # 글로벌 모델 파일 저장
-            torch.save(global_model, './model_file/global_model/server-global-model_' + str(
-                k) + '.pth')  ## => 2개의 클라이언트의 파일을 fedavg한 후 저장 해야함 .

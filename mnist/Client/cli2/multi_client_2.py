@@ -11,7 +11,7 @@ from torch.autograd import Variable
 from torch.utils.data.sampler import SubsetRandomSampler
 
 from tqdm import tqdm
-
+import time
 
 
 # 클라이언트와의 접속 확인
@@ -25,7 +25,7 @@ import os
 
 current_path = os.getcwd()
 current_model_file_path = os.path.join(current_path, 'model_file')
-update_iter = 10 # 업데이트 횟수
+update_iter = 32 # 업데이트 횟수
 
 if torch.cuda.is_available():
     device = torch.device("cuda")
@@ -76,11 +76,11 @@ def weights_init(m):
         nn.init.xavier_normal_(m.weight)
 
 
-HOST = 'SERVER IP ADDRESS'
-PORT = SERVER PORT 
+HOST = ''
+PORT = 33138
 client_name = 'client_2'
 
-for k in range(0,12): # ===================모델 업데이트를 10번함 =====================================
+for k in range(0,update_iter): # ===================모델 업데이트를 10번함 =====================================
 
     server_model_file_name = 'server-global-model_'+str(k) + '.pth'
 
@@ -93,6 +93,9 @@ for k in range(0,12): # ===================모델 업데이트를 10번함 =====
         c2_recv_g.connect((HOST, PORT)) # 서버로 connect 요청 보냄
         print('서버와 연결 성공!')
         while True:
+
+            time.sleep(2)
+
 
             c2_recv_g.sendall('model_request'.encode('utf-8'))  # 모델 요청 신호 전송
 
@@ -124,7 +127,6 @@ for k in range(0,12): # ===================모델 업데이트를 10번함 =====
 
     batch_size = 64
     learning_rate = 0.01
-    num_epochs = 30
 
     # Define a transform to normalize the data
     transform = transforms.Compose([transforms.ToTensor(),
@@ -179,7 +181,7 @@ for k in range(0,12): # ===================모델 업데이트를 10번함 =====
 
 
     # number of epochs to train the model
-    n_epochs = 10
+    n_epochs = 2
 
     valid_loss_min = np.Inf  # track change in validation loss
 
@@ -345,5 +347,7 @@ for k in range(0,12): # ===================모델 업데이트를 10번함 =====
                         print(ex)
                 print("전송완료 : %s 전송량 %d " %(client_model_file_name, data_transferred))
 
+
                 c2_send_u.close()
                 break
+
