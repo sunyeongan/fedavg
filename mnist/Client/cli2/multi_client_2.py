@@ -351,3 +351,4 @@ for k in range(0,update_iter): # ===================모델 업데이트를 10번
                 c2_send_u.close()
                 break
 
+# feat bracn 추가 
